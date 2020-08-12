@@ -1,0 +1,125 @@
+---
+title: "PracticalMachineLearningProject"
+author: "Eduardo Sequeira"
+date: "12/08/2020"
+output: html_document
+---
+
+# Coursera Practical Machine Learning Course Project
+
+## Synopsis
+
+The goal of this project is to predict the way of performing  dumbbell biceps 
+curls based on data from accelerometers located on the belt, forearm, arm, and 
+dumbell of 6 participants. 
+The 5 possible methods are:
+A: exactly according to the specification 
+B: throwing the elbows to the front
+C: lifting the dumbbell only halfway 
+D: lowering the dumbbell only halfway
+E: throwing the hips to the front
+
+```{r setup, include=TRUE, cache = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Initialization
+```{r, results="hide"}
+rm(list = ls(all = TRUE))
+
+setwd('/Users/Eduardo/Documents/Coursera Directories/PracticalMachineLearning/Practical_Machine_Learning')
+
+library(caret)
+library(ggplot2)
+
+trainingRaw <- read.csv(file="pml-training.csv", header=TRUE, as.is = TRUE
+                        , stringsAsFactors = FALSE, sep=','
+                        ,na.strings=c('NA','','#DIV/0!'))
+
+testingRaw <- read.csv(file="pml-testing.csv", header=TRUE, as.is = TRUE
+                       , stringsAsFactors = FALSE, sep=','
+                       , na.strings=c('NA','','#DIV/0!'))
+
+trainingRaw$classe <- as.factor(trainingRaw$classe) 
+```
+
+## Data Examination
+With the data now unpacked and in R, we are able to look into the testingRaw
+data and the trainingRaw data, where we can look into the variables and 
+observations avaliable to us. We will see variables such as: user names, 
+the accelerometer data from the belt, forearm, arm, etc., as well as data from
+the dumbbell itself.
+
+## Data Cleaning
+Upon examing the data, we see immediately that there are a lot of NA values in
+this dataset, so to disregard the empty cells, and the NAs, we will do some data
+cleaning before continuing.
+
+```{r, results="hide"}
+indColToRemove <- which(colSums(is.na(trainingRaw) |trainingRaw=="")>0.9*dim(trainingRaw)[1]) 
+TrainDataClean <- trainingRaw[,-indColToRemove]
+TrainDataClean <- TrainDataClean[,-c(1:7)]
+
+indColToRemove <- which(colSums(is.na(testingRaw) |testingRaw=="")>0.9*dim(testingRaw)[1]) 
+TestDataClean <- testingRaw[,-indColToRemove]
+TestDataClean <- TestDataClean[,-1]
+```
+
+## Cross Validation Set
+Training set data has two portions - one for training, and one for testing.
+```{r, results="hide"}
+set.seed(12031987) # For Reproducible Research
+inTrain = createDataPartition(TrainDataClean$classe, p = 3/4, list=FALSE)
+training = TrainDataClean[inTrain,]
+Test1 = TrainDataClean[-inTrain,]
+```
+
+## Training Model
+We will train the model with random forest.
+```{r, results="hide"}
+trControl <- trainControl(method="cv", number=5)
+model_CT <- train(classe~., data=training, method="rpart", trControl=trControl)
+```
+
+## Training Set
+```{r}
+trainingPred <- predict(model_CT,newdata=training)
+confMatrixCT <- confusionMatrix(training$classe, trainingPred)
+
+confMatrixCT$table
+
+confMatrixCT$overall[1]
+```
+The accuracy of this model is quite poor, just barely surpassing 50%, which
+means that the predictions from this model will not be very well.
+
+## Training Set with Gradient Boosting
+```{r}
+model_GBM <- train(classe~., data=training, method="gbm", trControl=trControl, verbose=FALSE)
+
+print(model_GBM)
+
+plot(model_GBM)
+
+trainpred <- predict(model_GBM,newdata=Test1)
+
+confMatGBM <- confusionMatrix(Test1$classe,trainpred)
+
+confMatGBM$table
+
+confMatGBM$overall[1]
+```
+
+The overall accuracy of the gbm model is much better than the previous, with an
+accuracy of 96% as opposed to roughly 50%. So, we will use this model to do our
+prediction.
+
+Note: The Random Forest model could more easily provide a better prediction,
+but due to limitations and time constraints, previous attempts having gone for
+more than an hour processign with no results, this model is only recognized, but 
+not run for this project...
+
+```{r}
+FinalTestPred <- predict(model_GBM,newdata=TestDataClean)
+FinalTestPred
+```
